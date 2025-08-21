@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Linh Do" />
+  <meta name="dcterms.date" content="2025-07-27" />
+  <title>Yelp Review - Topic Modelling</title>
+  <style>
+    html {
+      line-height: 1.5;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 1em;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, 'Lucida Console', Consolas, monospace;
+      font-size: 85%;
+      margin: 0;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Yelp Review - Topic Modelling</h1>
+<p class="author">Linh Do</p>
+<p class="date">2025-07-27</p>
+</header>
+<p><code>{r setup, include=FALSE} knitr::opts_chunk$set(echo = TRUE)</code></p>
+<h1 id="data-preprocessing">Data preprocessing</h1>
+<p>```{r prepare library} # prepare library library(tidyverse)
+library(ggplot2) library(lubridate) library(stringr)
+library(topicmodels) library(stm) library(tm) library(textstem)
+library(dplyr) library(quanteda)</p>
+<pre><code>
+```{r &quot;Data cleaning&quot;}
+# import data
+df &lt;- read_csv(&quot;/Users/linhdo/Documents/University/University of Utah/Coursework/Summer 2025/Text Analytics/Text Analytics Yelp Data/yelp reviews.csv&quot;, show_col_types = FALSE)
+
+# data summary
+head(df)
+summary(df)
+str(df)
+
+ggplot(df, aes(x = StarRating)) +
+  geom_bar(fill = &quot;skyblue&quot;, color = &quot;black&quot;) +
+  theme_minimal()
+
+ggplot(df, aes(x = NumberOfReviews)) +
+  geom_histogram(bins = 10, fill = &quot;skyblue&quot;, color = &quot;black&quot;) +
+  theme_minimal()
+
+# change datatype of CommentDate and Date columns to date
+df$CommentDate &lt;- dmy(df$CommentDate)
+df$Date &lt;- dmy(df$Date)
+
+# missing values
+colSums(is.na(df))
+
+# remove Price column because of 636 missing values
+df &lt;- df %&gt;% select(-Price)
+
+# investigate the missing values in Address column
+df %&gt;% filter(is.na(Address))
+
+# fill in the missing values in Address column with &#39;Griffith Park, Los Angeles, CA 90027&#39;
+df &lt;- df %&gt;%
+  mutate(Address = if_else(is.na(Address), 
+                           &quot;Griffith Park, Los Angeles, CA 90027&quot;, 
+                           Address))
+
+# investigate the year of comment
+df$CommentYear &lt;- as.factor(format(df$CommentDate, &quot;%Y&quot;))
+
+# remove all rows where CommentYear = 2011, 2018 or 2020
+df &lt;- df[!df$CommentYear %in% c(2011, 2018, 2020), ]
+
+# investigate df
+head(df)
+str(df)</code></pre>
+<p>```{r “Select optimal number of topics”} # prepare df for topic
+modelling df_topic_model &lt;- df %&gt;% select(Rank, Comment,
+StarRating, CommentYear)</p>
+<h1 id="preprocess-text">preprocess text</h1>
+<p>processed &lt;- textProcessor( documents = df_topic_model$Comment,
+metadata = df_topic_model, lowercase = TRUE, removestopwords = TRUE,
+removenumbers = TRUE, removepunctuation = TRUE, stem = FALSE, # or TRUE
+if you want stemming wordLengths = c(3, Inf) )</p>
+<h1 id="prepare-documents-vocab-and-metadata">Prepare documents, vocab,
+and metadata</h1>
+<p>out &lt;- prepDocuments(processed<span
+class="math inline"><em>d</em><em>o</em><em>c</em><em>u</em><em>m</em><em>e</em><em>n</em><em>t</em><em>s</em>, <em>p</em><em>r</em><em>o</em><em>c</em><em>e</em><em>s</em><em>s</em><em>e</em><em>d</em></span>vocab,
+processed<span
+class="math inline"><em>m</em><em>e</em><em>t</em><em>a</em>)<em>d</em><em>o</em><em>c</em><em>s</em> &lt;  − <em>o</em><em>u</em><em>t</em></span>documents
+vocab &lt;- out<span
+class="math inline"><em>v</em><em>o</em><em>c</em><em>a</em><em>b</em><em>m</em><em>e</em><em>t</em><em>a</em> &lt;  − <em>o</em><em>u</em><em>t</em></span>meta</p>
+<h1 id="indices-for-high-and-low-star-ratings">Indices for high and low
+star ratings</h1>
+<p>high_idx &lt;- which(meta<span
+class="math inline"><em>S</em><em>t</em><em>a</em><em>r</em><em>R</em><em>a</em><em>t</em><em>i</em><em>n</em><em>g</em> &gt;  = 4)<em>l</em><em>o</em><em>w</em><sub><em>i</em></sub><em>d</em><em>x</em> &lt;  − <em>w</em><em>h</em><em>i</em><em>c</em><em>h</em>(<em>m</em><em>e</em><em>t</em><em>a</em></span>StarRating
+&lt; 4)</p>
+<h1 id="subset-documents">Subset documents</h1>
+<p>docs_high &lt;- docs[high_idx] docs_low &lt;- docs[low_idx]</p>
+<h1 id="subset-metadata">Subset metadata</h1>
+<p>meta_high &lt;- meta[high_idx, ] meta_low &lt;- meta[low_idx, ]</p>
+<h1 id="set-seed">Set seed</h1>
+<p>set.seed(12345)</p>
+<p>find_optimal_k &lt;- function(docs_subset, vocab, meta_subset,
+k_values = c(8, 9, 10, 11)) { searchK( documents = docs_subset, vocab =
+vocab, K = k_values, prevalence = ~ StarRating + CommentYear, data =
+meta_subset, max.em.its = 75, init.type = “Spectral”, verbose = FALSE )
+}</p>
+<h1 id="for-high-star-rating-segment">For high star rating segment</h1>
+<p>findingK_high &lt;- find_optimal_k(docs_high, vocab, meta_high)</p>
+<h1 id="for-low-star-rating-segment">For low star rating segment</h1>
+<p>findingK_low &lt;- find_optimal_k(docs_low, vocab, meta_low)</p>
+<h1 id="inspect-results">inspect results</h1>
+<p>print(findingK_high) plot(findingK_high)</p>
+<p>print(findingK_low) plot(findingK_low)</p>
+<pre><code>
+```{r &quot;Run STM model with K=10&quot;}
+# ----------------------
+# Split the original df_topic_model into high and low ratings
+# ----------------------
+df_high &lt;- df_topic_model %&gt;% filter(StarRating &gt;= 4)
+df_low  &lt;- df_topic_model %&gt;% filter(StarRating &lt; 4)
+
+
+</code></pre>
+<p>```{r “Run STM model with K=10”} # ———————- # STM for HIGH STAR
+RATINGS # ———————- set.seed(12345) model_high &lt;- stm( documents =
+docs_high, vocab = vocab_high, K = 10, prevalence = ~ StarRating +
+CommentYear, data = meta_high, max.em.its = 75, init.type = “Spectral”
+)</p>
+<h1 id="section">———————-</h1>
+<h1 id="stm-for-low-star-ratings">STM for LOW STAR RATINGS</h1>
+<h1 id="section-1">———————-</h1>
+<p>set.seed(12345) model_low &lt;- stm( documents = docs_low, vocab =
+vocab_low, K = 10, prevalence = ~ StarRating + CommentYear, data =
+meta_low, max.em.its = 75, init.type = “Spectral” )</p>
+<h1 id="label-and-plot-high">Label and plot high</h1>
+<p>labelTopics(model_high, n = 10) plot(model_high, type = “summary”, n
+= 10)</p>
+<h1 id="label-and-plot-low">Label and plot low</h1>
+<p>labelTopics(model_low, n = 10) plot(model_low, type = “summary”, n =
+10)</p>
+<p>prep_high &lt;- estimateEffect( formula = 1:10 ~ StarRating +
+CommentYear,<br />
+stmobj = model_high, metadata = meta_high, uncertainty = “Global” )</p>
+<p>prep_low &lt;- estimateEffect( formula = 1:10 ~ StarRating +
+CommentYear, stmobj = model_low, metadata = meta_low, uncertainty =
+“Global” )</p>
+<h1 id="for-high-star-ratings">For high star ratings</h1>
+<p>plot(prep_high, covariate = “StarRating”, topics = 1:10, model =
+model_high, method = “continuous”, xlab = “Star Rating”, main = “Effect
+of Star Rating on Topics (High Ratings)”)</p>
+<h1 id="for-low-star-ratings">For low star ratings</h1>
+<p>plot(prep_low, covariate = “StarRating”, topics = 1:10, model =
+model_low, method = “continuous”, xlab = “Star Rating”, main = “Effect
+of Star Rating on Topics (Low Ratings)”)</p>
+<pre><code>
+```{r}
+# Print top 10 words for each topic in high-rated model
+top_words_high &lt;- labelTopics(model_high, n = 10)
+print(top_words_high)
+
+# Print top 10 words for each topic in low-rated model
+top_words_low &lt;- labelTopics(model_low, n = 10)
+print(top_words_low)</code></pre>
+<pre class="{r}"><code># High-rated
+topic_props_high &lt;- colMeans(model_high$theta)
+print(topic_props_high)
+
+# Low-rated
+topic_props_low &lt;- colMeans(model_low$theta)
+print(topic_props_low)</code></pre>
+<p>Even though we segment restaurants based on ratings, we observe the
+same patterns between the 2 groups. Both groups have similar positive
+and negative themes. - Pros: high-rating guests value emotional
+connection to food and place — ambiance, flavor complexity, story, and
+attentive service are key drivers. - Cons: billing/order errors, poor
+employee attitude makes customers unappetizing and disappointed.</p>
+<p>In general, High-rating guests value emotional connection to food and
+place — ambiance, flavor complexity, story, and attentive service are
+key drivers. Negative ratings mostly stem from executional failures, not
+the concept or food. Guests feel let down by inconsistency, poor
+service, or unclear communication</p>
+<ol type="1">
+<li>Double Down on What Works (from High Ratings):</li>
+</ol>
+<ul>
+<li>Invest in staff training to maintain warm, attentive service.</li>
+<li>Elevate and rotate high-performing dishes like broths, Korean
+cuisine, and brunch.</li>
+<li>Promote wine and fine dining experiences to attract high-spending
+customers.</li>
+</ul>
+<ol start="2" type="1">
+<li>Address Key Pain Points (from Low Ratings):</li>
+</ol>
+<ul>
+<li>Audit flavor consistency, especially for burgers, sauces, and meat
+dishes.</li>
+<li>Resolve issues with reservations, billing, and communication with
+staff.</li>
+<li>Price/value perception must match ambiance and dish
+expectations.</li>
+</ul>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"9669a5017b606d9b","version":"2025.7.0","r":1,"token":"0357a45f23a943f08700f7f9af191ee6","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}}}' crossorigin="anonymous"></script>
+</body>
+</html>
